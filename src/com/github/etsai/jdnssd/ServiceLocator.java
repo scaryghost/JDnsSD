@@ -5,15 +5,16 @@
 package com.github.etsai.jdnssd;
 
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
-import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
 import javax.naming.ldap.InitialLdapContext;
@@ -24,31 +25,29 @@ import javax.naming.ldap.InitialLdapContext;
  */
 public class ServiceLocator {
     public class SRVRecordIterator implements Iterator<SRVRecord> {
-        private TreeMap<Integer, TreeSet<SRVRecord>> srvRecords;
-        private HashSet<SRVRecord> usedRecords;
+        private final TreeMap<Integer, TreeSet<SRVRecord>> srvRecords;
         
-        public SRVRecordIterator(TreeMap<Integer, TreeSet<SRVRecord>> records) {
-            usedRecords= new HashSet<>();
-            srvRecords= records;
+        public SRVRecordIterator(Collection<SRVRecord> records) {
+            srvRecords= new TreeMap<>();
+            for(SRVRecord record: records) {
+                if (!srvRecords.containsKey(record.getPriority())) {
+                    srvRecords.put(record.getPriority(), new TreeSet());
+                }
+                srvRecords.get(record.getPriority()).add(record);
+            }
         }
         
         
         @Override
         public boolean hasNext() {
-            if (srvRecords.isEmpty()) {
-                for(SRVRecord record: usedRecords) {
-                    if (!srvRecords.containsKey(record.getPriority())) {
-                        srvRecords.put(record.getPriority(), new TreeSet());
-                    }
-                    srvRecords.get(record.getPriority()).add(record);
-                }
-                return false;
-            }
-            return true;
+            return !srvRecords.isEmpty();
         }
 
         @Override
         public SRVRecord next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException("All SRV records have been used");
+            }
             Map.Entry<Integer, TreeSet<SRVRecord>> firstEntry= srvRecords.firstEntry();
         
             int totalWeight= 0;
@@ -70,7 +69,6 @@ public class ServiceLocator {
                 }
             }
 
-            usedRecords.add(it);
             firstEntry.getValue().remove(it);
             if (firstEntry.getValue().isEmpty()) {
                 srvRecords.remove(firstEntry.getKey());
@@ -89,15 +87,7 @@ public class ServiceLocator {
     public class SRVRecordIterable implements Iterable<SRVRecord> {
         private Iterator<SRVRecord> iterator;
         
-        public SRVRecordIterable(Attribute srvRecordsData) throws NamingException {
-            TreeMap<Integer, TreeSet<SRVRecord>> srvRecords= new TreeMap<>();
-            for(NamingEnumeration<?> e= srvRecordsData.getAll(); e.hasMoreElements();) {
-                SRVRecord record= new SRVRecord((String)e.nextElement());
-                if (!srvRecords.containsKey(record.getPriority())) {
-                    srvRecords.put(record.getPriority(), new TreeSet());
-                }
-                srvRecords.get(record.getPriority()).add(record);
-            }
+        public SRVRecordIterable(Collection<SRVRecord> records) {
             iterator= new SRVRecordIterator(srvRecords);
         }
         @Override
@@ -106,8 +96,9 @@ public class ServiceLocator {
         }
         
     }
+    
     private final String queryString, txtRecord;
-    private final Iterable<SRVRecord> srvRecords;
+    private final HashSet<SRVRecord> srvRecords;
     
     public ServiceLocator(String service, NetProtocol protocol, String domain) throws NamingException {
         queryString= String.format("_%s._%s.%s", service, protocol, domain);
@@ -118,7 +109,11 @@ public class ServiceLocator {
         
         Attributes attrs= (Attributes) ctx.getAttributes(queryString, new String[] { "SRV", "TXT" });
         txtRecord= (String)attrs.get("TXT").get(0);
-        srvRecords= new SRVRecordIterable(attrs.get("SRV"));
+        srvRecords= new HashSet<>();
+        for(NamingEnumeration<?> e= attrs.get("SRV").getAll(); e.hasMoreElements();) {
+            SRVRecord record= new SRVRecord((String)e.nextElement());
+            srvRecords.add(record);
+        }
     }
     
     public String getQueryString() {
@@ -130,6 +125,6 @@ public class ServiceLocator {
     }
     
     public Iterable<SRVRecord> getSRVRecords() {
-        return srvRecords;
+        return new SRVRecordIterable(srvRecords);
     }
 }
