@@ -51,4 +51,9 @@ public class SRVRecord implements Comparable {
         
         return sum;
     }
+    
+    @Override
+    public String toString() {
+        return String.format("{priority:%d, weight:%d, port:%d, hostname:%s}", priority, weight, port, hostname);
+    }
 }
