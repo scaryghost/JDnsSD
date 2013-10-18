@@ -29,8 +29,7 @@ public class Main {
             
             System.out.println(String.format("Query: %s", locator.getQueryString()));
             System.out.println(String.format("TXT Record: %s", locator.getTXTRecord()));
-            while(true) {
-                SRVRecord record= locator.getNextSRVRecord();
+            for(SRVRecord record: locator.getSRVRecords()) {
                 System.out.println(String.format("SRV Record: %s", record));
             }
         } catch (NamingException ex) {

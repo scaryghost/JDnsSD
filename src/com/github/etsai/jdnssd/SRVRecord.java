@@ -18,7 +18,7 @@ public class SRVRecord implements Comparable {
         priority= Integer.valueOf(properties[0]);
         weight= Integer.valueOf(properties[1]);
         port= Integer.valueOf(properties[2]);
-        hostname= properties[3];
+        hostname= properties[3].substring(0, properties[3].length() - 1);
     }
     
     public int getPort() {
